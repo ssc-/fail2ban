@@ -32,18 +32,23 @@ import sys
 
 class Regex:
 
+	HOST_REGEX = "(?:::f{4,6}:)?(?P<host>([\w\-._]*\w)" \
+				 "|([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4})"
+
 	##
 	# Constructor.
 	#
 	# Creates a new object. This method can throw RegexException in order to
 	# avoid construction of invalid object.
 	# @param value the regular expression
-	
-	def __init__(self, regex):
+	def __init__(self, regex, removePort=False):
 		self._matchCache = None
+		removePortsRegex = ""
+		if removePort:
+			removePortsRegex = "(:\d+)"
 		# Perform shortcuts expansions.
 		# Replace "<HOST>" with default regular expression for host.
-		regex = regex.replace("<HOST>", "(?:::f{4,6}:)?(?P<host>[\w\-.^_]*\w)")
+		regex = regex.replace("<HOST>", Regex.HOST_REGEX + removePortsRegex)
 		# Replace "<SKIPLINES>" with regular expression for multiple lines.
 		regexSplit = regex.split("<SKIPLINES>")
 		regex = regexSplit[0]
@@ -205,9 +210,9 @@ class FailRegex(Regex):
 	# avoid construction of invalid object.
 	# @param value the regular expression
 	
-	def __init__(self, regex):
+	def __init__(self, regex, removePort=False):
 		# Initializes the parent.
-		Regex.__init__(self, regex)
+		Regex.__init__(self, regex, removePort)
 		# Check for group "host"
 		if "host" not in self._regexObj.groupindex:
 			raise RegexException("No 'host' group in '%s'" % self._regex)

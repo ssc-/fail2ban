@@ -82,6 +82,14 @@ else:
 # This is due to tests not functioning for python3 as 2to3 takes place later
 exec(open(join("fail2ban", "version.py")).read())
 
+# Require backported ipaddress module, if we're in a python2 env
+install_requires = []
+
+try:
+	import ipaddress
+except ImportError:
+	install_requires.append('ipaddress')
+
 setup(
 	name = "fail2ban",
 	version = version,
@@ -99,6 +107,7 @@ setup(
 		'bin/fail2ban-regex',
 		'bin/fail2ban-testcases',
 	],
+	install_requires = install_requires,
 	packages = [
 		'fail2ban',
 		'fail2ban.client',

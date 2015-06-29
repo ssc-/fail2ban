@@ -58,6 +58,10 @@
 [Sat Jul 20 22:11:43.147674 2013] [authz_owner:error] [pid 17540:tid 140122922129152] [client 127.0.0.1:51548] AH01637: Authorization of user username to access /basic/authz_owner/cant_get_me.html failed, reason: file owner dan does not match
 
 # wget --http-user=username --http-password=password http://localhost/basic/authz_owner/cant_get_me.html -O /dev/null
+# failJSON: { "time": "2013-07-20T21:42:44", "match": true , "host": "::1" }
+[Sat Jul 20 21:42:44.304159 2013] [authz_core:error] [pid 17484:tid 140123095914240] [client ::1:51397] AH01631: user username: authorization failure for "/basic/authz_owner/cant_get_me.html":
+
+# wget --http-user=username --http-password=password http://localhost/basic/authz_owner/cant_get_me.html -O /dev/null
 # failJSON: { "time": "2013-07-20T21:42:44", "match": true , "host": "127.0.0.1" } 
 [Sat Jul 20 21:42:44.304159 2013] [authz_core:error] [pid 17484:tid 140123095914240] [client 127.0.0.1:51397] AH01631: user username: authorization failure for "/basic/authz_owner/cant_get_me.html": 
 

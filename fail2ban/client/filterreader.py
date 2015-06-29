@@ -39,6 +39,7 @@ class FilterReader(DefinitionInitConfigReader):
 	_configOpts = [
 		["string", "ignoreregex", None],
 		["string", "failregex", ""],
+		["string", "removeport", None],
 	]
 
 	def setFile(self, fileName):
@@ -62,6 +63,12 @@ class FilterReader(DefinitionInitConfigReader):
 		opts = self.getCombined()
 		if not len(opts):
 			return stream
+		# Make sure removeport is set before we add any regex
+		for opt, value in opts.iteritems():
+			if opt == "removeport":
+				value = value.strip()
+				if value != '':
+					stream.append(["set", self._jailName, "removeport", value])
 		for opt, value in opts.iteritems():
 			if opt == "failregex":
 				for regex in value.split('\n'):

@@ -810,6 +810,7 @@ class GetFailures(unittest.TestCase):
 	FILENAME_02 = os.path.join(TEST_FILES_DIR, "testcase02.log")
 	FILENAME_03 = os.path.join(TEST_FILES_DIR, "testcase03.log")
 	FILENAME_04 = os.path.join(TEST_FILES_DIR, "testcase04.log")
+	FILENAME_REMOVEPORT = os.path.join(TEST_FILES_DIR, "testcase-removeport.log")
 	FILENAME_USEDNS = os.path.join(TEST_FILES_DIR, "testcase-usedns.log")
 	FILENAME_MULTILINE = os.path.join(TEST_FILES_DIR, "testcase-multiline.log")
 
@@ -921,7 +922,37 @@ class GetFailures(unittest.TestCase):
 			filter_.getFailures(GetFailures.FILENAME_USEDNS)
 			_assert_correct_last_attempt(self, filter_, output)
 
+	def testGetFailuresRemovePort(self):
+		# We should still catch failures with removeport = no ;-)
+		output_yes = [ ('127.0.0.1', 2, 1374349364.0),
+						('::1', 2, 1374349364.0),
+						('2606:2800:220:1:248:1893:25c8:1946', 2, 1374349364.0)]
 
+		output_no = [ ('127.0.0.1', 2, 1374349364.0),
+						('2606:2800:220:1:248:1893:25c8:1946', 2, 1374349364.0)]
+
+		# The matches without removePort activated will count the wrong ips
+		#   ::1:51397 -> ::1      (port doesn't match [0-9a-zA-Z]{1,4} - OK)
+		#   ::1:597   -> ::1:597  (port matches [0-9a-zA-Z]{1,4} and will be interpreted as part of ip - FAIL)
+
+		for removePort, output in (('yes',  output_yes),
+							   ('no',   output_no)):
+			jail = DummyJail()
+			filter_ = FileFilter(jail, removePort=removePort)
+			filter_.active = True
+			filter_.failManager.setMaxRetry(2)	# we might have just few failures
+
+			filter_.addLogPath(GetFailures.FILENAME_REMOVEPORT)
+			filter_.addFailRegex("\[client <HOST>(:\d{1,5})?\].*authorization failure")
+			filter_.getFailures(GetFailures.FILENAME_REMOVEPORT)
+			foundList = []
+			while True:
+				try:
+					foundList.append(
+						_ticket_tuple(filter_.failManager.toBan())[0:3])
+				except FailManagerEmpty:
+					break
+			self.assertEqual(sorted(foundList), sorted(output))
 
 	def testGetFailuresMultiRegex(self):
 		output = ('141.3.81.106', 8, 1124013541.0)
@@ -999,12 +1030,28 @@ class GetFailures(unittest.TestCase):
 class DNSUtilsTests(unittest.TestCase):
 
 	def testUseDns(self):
-		res = DNSUtils.textToIp('www.example.com', 'no')
+		res = DNSUtils.textToIp('www.example.com', 'no', 'no')
 		self.assertEqual(res, [])
-		res = DNSUtils.textToIp('www.example.com', 'warn')
+		res = DNSUtils.textToIp('www.example.com', 'warn', 'no')
 		self.assertEqual(res, ['93.184.216.34'])
-		res = DNSUtils.textToIp('www.example.com', 'yes')
+		res = DNSUtils.textToIp('www.example.com', 'yes', 'no')
 		self.assertEqual(res, ['93.184.216.34'])
+
+	def testUseDns6(self):
+		res = DNSUtils.textToIp('www.example.com', 'no', 'no')
+		self.assertEqual(res, [])
+		res = DNSUtils.textToIp('www.example.com', 'no', 'warn')
+		self.assertEqual(res, ['2606:2800:220:1:248:1893:25c8:1946'])
+		res = DNSUtils.textToIp('www.example.com', 'no', 'yes')
+		self.assertEqual(res, ['2606:2800:220:1:248:1893:25c8:1946'])
+
+	def testUseDnsMixed(self):
+		res = DNSUtils.textToIp('www.example.com', 'no', 'no')
+		self.assertEqual(res, [])
+		res = DNSUtils.textToIp('www.example.com', 'warn', 'warn')
+		self.assertEqual(sorted(res), sorted(['93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946']))
+		res = DNSUtils.textToIp('www.example.com', 'yes', 'yes')
+		self.assertEqual(sorted(res), sorted(['93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946']))
 
 	def testTextToIp(self):
 		# Test hostnames
@@ -1014,9 +1061,23 @@ class DNSUtilsTests(unittest.TestCase):
 			'1.2.3.4.buga.xxxxx.yyy.invalid',
 			]
 		for s in hostnames:
-			res = DNSUtils.textToIp(s, 'yes')
+			res = DNSUtils.textToIp(s, 'yes', 'no')
 			if s == 'www.example.com':
 				self.assertEqual(res, ['93.184.216.34'])
+			else:
+				self.assertEqual(res, [])
+
+	def testTextToIpWithIPv6(self):
+		# Test hostnames
+		hostnames = [
+			'www.example.com',
+			'doh1.2.3.4.buga.xxxxx.yyy.invalid',
+			'1.2.3.4.buga.xxxxx.yyy.invalid',
+			]
+		for s in hostnames:
+			res = DNSUtils.textToIp(s, 'yes', 'yes')
+			if s == 'www.example.com':
+				self.assertEqual(sorted(res), sorted(['93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946']))
 			else:
 				self.assertEqual(res, [])
 

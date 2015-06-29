@@ -288,6 +288,27 @@ class Transmitter(TransmitterBase):
 			self.transm.proceed(["set", self.jailName, "usedns", value]),
 			(0, "no"))
 
+	def testJailUseDNS6(self):
+		self.setGetTest("usedns6", "yes", jail=self.jailName)
+		self.setGetTest("usedns6", "warn", jail=self.jailName)
+		self.setGetTest("usedns6", "no", jail=self.jailName)
+
+		# Safe default should be "no"
+		value = "Fish"
+		self.assertEqual(
+			self.transm.proceed(["set", self.jailName, "usedns6", value]),
+			(0, "no"))
+
+	def testJailRemovePort(self):
+		self.setGetTest("removeport", "yes", jail=self.jailName)
+		self.setGetTest("removeport", "no", jail=self.jailName)
+
+		# Safe default should be "no"
+		value = "Fish"
+		self.assertEqual(
+			self.transm.proceed(["set", self.jailName, "removeport", value]),
+			(0, "no"))
+
 	def testJailBanIP(self):
 		self.server.startJail(self.jailName) # Jail must be started
 
@@ -407,13 +428,13 @@ class Transmitter(TransmitterBase):
 		#NOTE: Should duplicates be allowed, or silent ignore like logpath?
 		self.assertEqual(
 			self.transm.proceed(["set", self.jailName, "addignoreip", value]),
-			(0, [value, value]))
+			(0, [value]))
 		self.assertEqual(
 			self.transm.proceed(["get", self.jailName, "ignoreip"]),
-			(0, [value, value]))
+			(0, [value]))
 		self.assertEqual(
 			self.transm.proceed(["set", self.jailName, "delignoreip", value]),
-			(0, [value]))
+			(0, []))
 
 	def testJailIgnoreCommand(self):
 		self.setGetTest("ignorecommand", "bin ", jail=self.jailName)
@@ -426,9 +447,9 @@ class Transmitter(TransmitterBase):
 				"failed attempt from <HOST> again",
 			],
 			[
-				"user john at (?:::f{4,6}:)?(?P<host>[\w\-.^_]*\\w)",
-				"Admin user login from (?:::f{4,6}:)?(?P<host>[\w\-.^_]*\\w)",
-				"failed attempt from (?:::f{4,6}:)?(?P<host>[\w\-.^_]*\\w) again",
+				"user john at (?:::f{4,6}:)?(?P<host>([\w\-._]*\w)|([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4})",
+				"Admin user login from (?:::f{4,6}:)?(?P<host>([\w\-._]*\w)|([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4})",
+				"failed attempt from (?:::f{4,6}:)?(?P<host>([\w\-._]*\w)|([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}) again",
 			],
 			self.jailName
 		)
@@ -451,7 +472,7 @@ class Transmitter(TransmitterBase):
 			],
 			[
 				"user john",
-				"Admin user login from (?:::f{4,6}:)?(?P<host>[\w\-.^_]*\\w)",
+				"Admin user login from (?:::f{4,6}:)?(?P<host>([\w\-._]*\w)|([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4})",
 				"Dont match me!",
 			],
 			self.jailName

@@ -99,6 +99,8 @@ class JailReader(ConfigReader):
 				["int", "findtime", None],
 				["int", "bantime", None],
 				["string", "usedns", None],
+				["string", "usedns6", None],
+				["string", "removeport", None],
 				["string", "failregex", None],
 				["string", "ignoreregex", None],
 				["string", "ignorecommand", None],
@@ -217,6 +219,10 @@ class JailReader(ConfigReader):
 				stream.append(["set", self.__name, "bantime", self.__opts[opt]])
 			elif opt == "usedns":
 				stream.append(["set", self.__name, "usedns", self.__opts[opt]])
+			elif opt == "usedns6":
+				stream.append(["set", self.__name, "usedns6", self.__opts[opt]])
+			elif opt == "removeport":
+				stream.append(["set", self.__name, "removeport", self.__opts[opt]])
 			elif opt == "failregex":
 				for regex in self.__opts[opt].split('\n'):
 					# Do not send a command if the rule is empty.

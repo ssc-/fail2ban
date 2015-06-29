@@ -16,3 +16,5 @@
 # apache 2.4
 # failJSON: { "time": "2013-12-23T07:49:01", "match": true , "host": "204.232.202.107" }
 [Mon Dec 23 07:49:01.981912 2013] [:error] [pid 3790] [client 204.232.202.107:46301] script '/var/www/timthumb.php' not found or unable to stat
+# failJSON: { "time": "2013-12-23T07:49:01", "match": true , "host": "2606:2800:220:1:248:1893:25c8:1946" }
+[Mon Dec 23 07:49:01.981912 2013] [:error] [pid 3790] [client 2606:2800:220:1:248:1893:25c8:1946:46301] script '/var/www/timthumb.php' not found or unable to stat

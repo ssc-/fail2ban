@@ -27,6 +27,7 @@ import locale
 import os
 import re
 import sys
+import ipaddress
 
 from .failmanager import FailManagerEmpty, FailManager
 from .ticket import FailTicket
@@ -56,7 +57,7 @@ class Filter(JailThread):
 	# Initialize the filter object with default values.
 	# @param jail the jail object
 
-	def __init__(self, jail, useDns='warn'):
+	def __init__(self, jail, useDns='warn', useDns6='no', removePort='no'):
 		JailThread.__init__(self)
 		## The jail which contains this filter.
 		self.jail = jail
@@ -68,10 +69,14 @@ class Filter(JailThread):
 		self.__ignoreRegex = list()
 		## Use DNS setting
 		self.setUseDns(useDns)
+		## Use DNS setting
+		self.setUseDns6(useDns6)
+		## Use RemovePort setting
+		self.setRemovePort(removePort)
 		## The amount of time to look back.
 		self.__findTime = 600
 		## The ignore IP list.
-		self.__ignoreIpList = []
+		self.__ignoreIpList = IgnoreList()
 		## Size of line buffer
 		self.__lineBufferSize = 1
 		## Line buffer
@@ -99,7 +104,8 @@ class Filter(JailThread):
 
 	def addFailRegex(self, value):
 		try:
-			regex = FailRegex(value)
+			removeport = self.__removePort == 'yes'
+			regex = FailRegex(value, removePort=removeport)
 			self.__failRegex.append(regex)
 			if "\n" in regex.getRegex() and not self.getMaxLines() > 1:
 				logSys.warning(
@@ -141,7 +147,7 @@ class Filter(JailThread):
 			self.__ignoreRegex.append(regex)
 		except RegexException, e:
 			logSys.error(e)
-			raise e 
+			raise e
 
 	def delIgnoreRegex(self, index):
 		try:
@@ -182,6 +188,50 @@ class Filter(JailThread):
 
 	def getUseDns(self):
 		return self.__useDns
+
+	##
+	# Set the Use DNS mode
+	# @param value the usedns6 mode
+
+	def setUseDns6(self, value):
+		if isinstance(value, bool):
+			value = {True: 'yes', False: 'no'}[value]
+		value = value.lower()			  # must be a string by now
+		if not (value in ('yes', 'no', 'warn')):
+			logSys.error("Incorrect value %r specified for usedns6. "
+						 "Using safe 'no'" % (value,))
+			value = 'no'
+		logSys.debug("Setting usedns6 = %s for %s" % (value, self))
+		self.__useDns6 = value
+
+	##
+	# Get the usedns mode
+	# @return the usedns6 mode
+
+	def getUseDns6(self):
+		return self.__useDns6
+
+	##
+	# Set the removeport option
+	# @param value the removeport option
+
+	def setRemovePort(self, value):
+		if isinstance(value, bool):
+			value = {True: 'yes', False: 'no'}[value]
+		value = value.lower()		  # must be a string by now
+		if not (value in ('yes', 'no')):
+			logSys.error("Incorrect value %r specified for removeport. "
+						 "Using safe 'no'" % (value,))
+			value = 'no'
+		logSys.debug("Setting removeport = %s for %s" % (value, self))
+		self.__removePort = value
+
+	##
+	# Get the removeport option
+	# @return the removeport option
+
+	def getRemovePort(self):
+		return self.__removePort
 
 	##
 	# Set the time needed to find a failure.
@@ -337,7 +387,7 @@ class Filter(JailThread):
 
 	def addIgnoreIP(self, ip):
 		logSys.debug("Add " + ip + " to ignore list")
-		self.__ignoreIpList.append(ip)
+		self.__ignoreIpList.add(ip)
 
 	def delIgnoreIP(self, ip):
 		logSys.debug("Remove " + ip + " from ignore list")
@@ -348,7 +398,7 @@ class Filter(JailThread):
 			logSys.info("[%s] Ignore %s by %s" % (self.jail.name, ip, ignore_source))
 
 	def getIgnoreIP(self):
-		return self.__ignoreIpList
+		return self.__ignoreIpList.dump()
 
 	##
 	# Check if IP address/DNS is in the ignore list.
@@ -359,32 +409,12 @@ class Filter(JailThread):
 	# @return True if IP address is in ignore list
 
 	def inIgnoreIPList(self, ip, log_ignore=False):
-		for i in self.__ignoreIpList:
-			# An empty string is always false
-			if i == "":
-				continue
-			s = i.split('/', 1)
-			# IP address without CIDR mask
-			if len(s) == 1:
-				s.insert(1, '32')
-			elif "." in s[1]: # 255.255.255.0 style mask
-				s[1] = len(re.search(
-					"(?<=b)1+", bin(DNSUtils.addr2bin(s[1]))).group())
-			s[1] = long(s[1])
-			try:
-				a = DNSUtils.addr2bin(s[0], cidr=s[1])
-				b = DNSUtils.addr2bin(ip, cidr=s[1])
-			except Exception:
-				# Check if IP in DNS
-				ips = DNSUtils.dnsToIp(i)
-				if ip in ips:
-					self.logIgnoreIp(ip, log_ignore, ignore_source="dns")
-					return True
-				else:
-					continue
-			if a == b:
-				self.logIgnoreIp(ip, log_ignore, ignore_source="ip")
-				return True
+
+		source = self.__ignoreIpList.match(ip)
+
+		if source is not None:
+			self.logIgnoreIp(ip, log_ignore, source)
+			return True
 
 		if self.__ignoreCommand:
 			command = CommandAction.replaceTag(self.__ignoreCommand, { 'ip': ip } )
@@ -394,7 +424,6 @@ class Filter(JailThread):
 			return ret_ignore
 
 		return False
-
 
 	def processLine(self, line, date=None, returnRawHost=False,
 		checkAllRegex=False):
@@ -530,7 +559,7 @@ class Filter(JailThread):
 							if not checkAllRegex:
 								break
 						else:
-							ipMatch = DNSUtils.textToIp(host, self.__useDns)
+							ipMatch = DNSUtils.textToIp(host, self.__useDns, self.__useDns6)
 							if ipMatch:
 								for ip in ipMatch:
 									failList.append([failRegexIndex, ip, date,
@@ -545,7 +574,7 @@ class Filter(JailThread):
 		"""Status of failures detected by filter.
 		"""
 		ret = [("Currently failed", self.failManager.size()),
-		       ("Total failed", self.failManager.getFailTotal())]
+			   ("Total failed", self.failManager.getFailTotal())]
 		return ret
 
 
@@ -673,10 +702,6 @@ class FileFilter(Filter):
 			return False
 		except OSError, e: # pragma: no cover - requires race condition to tigger this
 			logSys.error("Error opening %s" % filename)
-			logSys.exception(e)
-			return False
-		except OSError, e: # pragma: no cover - Requires implemention error in FileContainer to generate
-			logSys.error("Internal errror in FileContainer open method - please report as a bug to https://github.com/fail2ban/fail2ban/issues")
 			logSys.exception(e)
 			return False
 
@@ -838,6 +863,95 @@ class JournalFilter(Filter): # pragma: systemd no cover
 	def getJournalMatch(self, match): # pragma: no cover - Base class, not used
 		return []
 
+
+class IgnoreList(object):
+	def __init__(self):
+		self._list = list()
+
+	def add(self, text):
+		# skip if entry already added to list
+		if len([ x for x in self._list if x.match_string(text) ]) > 0:
+			return
+
+		try:
+			# assume we have a network ..
+			if "/" in text:
+				self._list.append(
+					IgnoreListItem(text, ipaddress.ip_network(unicode(text), False))
+				)
+			# or an ip address ..
+			elif DNSUtils.IP_CRE.match(text) or DNSUtils.IP_CRE6.match(text):
+				self._list.append(
+					IgnoreListItem(text, ipaddress.ip_address(unicode(text)))
+				)
+			# and finally a dns name ..
+			else:
+				for ip in DNSUtils.dnsToIp(text):
+					self._list.append(
+						IgnoreListItem(text, ipaddress.ip_address(unicode(ip)))
+					)
+		except Exception, e:
+			logSys.error("Unable to add %s to ignore list: %s" % (text, e))
+
+	def remove(self, text):
+		self._list[:] = [ x for x in self._list if not x.match_string(text) ]
+
+
+	def _match_ignore_list(self, ip):
+		for n in self._list:
+			if n.match(ip):
+				return True
+		return False
+
+	def match(self, inputText):
+		try:
+			if DNSUtils.IP_CRE.match(inputText) or DNSUtils.IP_CRE6.match(inputText):
+				if self._match_ignore_list(ipaddress.ip_address(unicode(inputText))):
+					return 'ip'
+			else:
+				for ip in DNSUtils.dnsToIp(inputText):
+					if self._match_ignore_list(ipaddress.ip_address(unicode(ip))):
+						return 'dns'
+		except Exception, e:
+			logSys.error("Error mapping input %s to a valid ip address: %s." % (inputText, e))
+
+		return None
+
+	def dump(self):
+		return [ x.raw for x in self._list ]
+
+
+class IgnoreListItem(object):
+
+	def __init__(self, text, obj):
+		self._raw_string = text
+		self._obj = obj
+
+	def match_string(self, text):
+		return self._raw_string == text
+
+	@property
+	def type(self):
+		return type(self._obj)
+
+	@property
+	def raw(self):
+		return self._raw_string
+
+	def match(self, ip):
+		if type(ip) == ipaddress.IPv4Address:
+			if self.type == ipaddress.IPv4Network:
+				return ip in self._obj
+			if self.type == ipaddress.IPv4Address:
+				return ip == self._obj
+		elif type(ip) == ipaddress.IPv6Address:
+			if self.type == ipaddress.IPv6Network:
+				return ip in self._obj
+			if self.type == ipaddress.IPv6Address:
+				return ip == self._obj
+		return False
+
+
 ##
 # Utils class for DNS and IP handling.
 #
@@ -850,18 +964,19 @@ import struct
 class DNSUtils:
 
 	IP_CRE = re.compile("^(?:\d{1,3}\.){3}\d{1,3}$")
+	IP_CRE6 = re.compile("^(?:[0-9:A-Fa-f]{3,})$")
 
 	@staticmethod
-	def dnsToIp(dns):
+	def dnsToIp(dns, ipv6=False):
 		""" Convert a DNS into an IP address using the Python socket module.
 			Thanks to Kevin Drapel.
 		"""
 		try:
-			return set(socket.gethostbyname_ex(dns)[2])
-		except socket.error, e:
-			logSys.warning("Unable to find a corresponding IP address for %s: %s"
-						% (dns, e))
-			return list()
+			ips = set([x[-1][0] for x in socket.getaddrinfo(dns, 80)])
+			if not ipv6:
+				return [ x for x in ips if ":" not in x ]
+			else:
+				return [ x for x in ips if ":" in x ]
 		except socket.error, e:
 			logSys.warning("Socket error raised trying to resolve hostname %s: %s"
 						% (dns, e))
@@ -884,7 +999,19 @@ class DNSUtils:
 		if match:
 			return match
 		else:
-			return None
+			match = DNSUtils.IP_CRE6.match(text)
+			if match:
+				return match
+		return None
+
+	@staticmethod
+	def afFromIp(ipstring):
+		""" Retrun address-family from ipstring
+		"""
+		if ":" in ipstring:
+			return socket.AF_INET6
+		else:
+			return socket.AF_INET
 
 	@staticmethod
 	def isValidIP(string):
@@ -892,13 +1019,13 @@ class DNSUtils:
 		"""
 		s = string.split('/', 1)
 		try:
-			socket.inet_aton(s[0])
+			socket.inet_pton(DNSUtils.afFromIp(string), s[0])
 			return True
 		except socket.error:
 			return False
 
 	@staticmethod
-	def textToIp(text, useDns):
+	def textToIp(text, useDns, useDns6):
 		""" Return the IP of DNS found in a given text.
 		"""
 		ipList = list()
@@ -909,30 +1036,60 @@ class DNSUtils:
 			if DNSUtils.isValidIP(plainIPStr):
 				ipList.append(plainIPStr)
 
+		no_ip = not ipList
+
 		# If we are allowed to resolve -- give it a try if nothing was found
-		if useDns in ("yes", "warn") and not ipList:
+		if useDns in ("yes", "warn") and no_ip:
 			# Try to get IP from possible DNS
 			ip = DNSUtils.dnsToIp(text)
 			ipList.extend(ip)
 			if ip and useDns == "warn":
-				logSys.warning("Determined IP using DNS Lookup: %s = %s",
+				logSys.warning("Determined IPv4 address using DNS Lookup: %s = %s",
+					text, ipList)
+
+		# If we are allowed to resolve -- give it a try if nothing was found
+		if useDns6 in ("yes", "warn") and no_ip:
+			# Try to get IP from possible DNS
+			ip6 = DNSUtils.dnsToIp(text, ipv6=True)
+			ipList.extend(ip6)
+			if ip6 and useDns6 == "warn":
+				logSys.warning("Determined IPv6 address using DNS Lookup: %s = %s",
 					text, ipList)
 
 		return ipList
 
 	@staticmethod
 	def addr2bin(ipstring, cidr=None):
-		""" Convert a string IPv4 address into binary form.
+		""" Convert a string IPv4/IPv6 address into binary form.
 		If cidr is supplied, return the network address for the given block
 		"""
-		if cidr is None:
-			return struct.unpack("!L", socket.inet_aton(ipstring))[0]
+
+		ip = ipaddress.ip_address(u"%s" % ipstring)
+		if type(ip) == ipaddress.IPv4Address:
+			if cidr is not None:
+				MASK = 0xFFFFFFFFL
+				return ~(MASK >> cidr) & MASK & int(ip)
+			else:
+				return int(ip)
 		else:
-			MASK = 0xFFFFFFFFL
-			return ~(MASK >> cidr) & MASK & DNSUtils.addr2bin(ipstring)
+			if cidr is not None:
+				MASK = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFL
+				return ~(MASK >> cidr) & MASK & int(ip)
+			else:
+				return int(ip)
 
 	@staticmethod
 	def bin2addr(ipbin):
-		""" Convert a binary IPv4 address into string n.n.n.n form.
+		""" Convert a binary IPv4/IPvz6 address into string form.
+			Function will return a valid result in most cases, but you can't
+			trust any result.
+			E.g:
+				In [0]: DNSUtils.bin2addr(DNSUtils.addr2bin("::1"))
+				Out[0]: '0.0.0.1'
 		"""
-		return socket.inet_ntoa(struct.pack("!L", ipbin))
+		try:
+			return socket.inet_ntoa(struct.pack("!L", ipbin))
+		except struct.error:
+			lo = 0x0000000000000000FFFFFFFFFFFFFFFFL & ipbin
+			hi = ipbin >> 64
+			return socket.inet_ntop(socket.AF_INET6, struct.pack("!QQ", hi, lo))

@@ -287,7 +287,19 @@ class Server:
 	
 	def getUseDns(self, name):
 		return self.__jails[name].filter.getUseDns()
-	
+
+	def setUseDns6(self, name, value):
+		self.__jails[name].filter.setUseDns6(value)
+
+	def getUseDns6(self, name):
+		return self.__jails[name].filter.getUseDns6()
+
+	def setRemovePort(self, name, value):
+		self.__jails[name].filter.setRemovePort(value)
+
+	def getRemovePort(self, name):
+		return self.__jails[name].filter.getRemovePort()
+
 	def setMaxRetry(self, name, value):
 		self.__jails[name].filter.setMaxRetry(value)
 	

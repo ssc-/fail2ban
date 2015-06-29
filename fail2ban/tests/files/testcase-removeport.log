@@ -1,0 +1,6 @@
+[Sat Jul 20 21:42:44.304156 2013] [authz_core:error] [pid 17484:tid 140123095914240] [client ::1:51397] AH01631: user username: authorization failure for "/basic/authz_owner/cant_get_me.html":
+[Sat Jul 20 21:42:44.304157 2013] [authz_core:error] [pid 17484:tid 140123095914240] [client ::1:597] AH01631: user username: authorization failure for "/basic/authz_owner/cant_get_me.html":
+[Sat Jul 20 21:42:44.304158 2013] [authz_core:error] [pid 17484:tid 140123095914240] [client 2606:2800:220:1:248:1893:25c8:1946:596] AH01631: user username: authorization failure for "/basic/authz_owner/cant_get_me.html":
+[Sat Jul 20 21:42:44.304159 2013] [authz_core:error] [pid 17484:tid 140123095914240] [client 2606:2800:220:1:248:1893:25c8:1946:597] AH01631: user username: authorization failure for "/basic/authz_owner/cant_get_me.html":
+[Sat Jul 20 21:42:44.304160 2013] [authz_core:error] [pid 17484:tid 140123095914240] [client 127.0.0.1:597] AH01631: user username: authorization failure for "/basic/authz_owner/cant_get_me.html":
+[Sat Jul 20 21:42:44.304161 2013] [authz_core:error] [pid 17484:tid 140123095914240] [client 127.0.0.1:597] AH01631: user username: authorization failure for "/basic/authz_owner/cant_get_me.html":
